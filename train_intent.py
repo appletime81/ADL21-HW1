@@ -22,8 +22,14 @@ def main(args):
     intent_idx_path = args.cache_dir / "intent2idx.json"
     intent2idx: Dict[str, int] = json.loads(intent_idx_path.read_text())
 
-    data_paths = {split: args.data_dir / f"{split}.json" for split in SPLITS}
-    data = {split: json.loads(path.read_text()) for split, path in data_paths.items()}
+    data_paths = {
+        split: args.data_dir / f"{split}.json" 
+        for split in SPLITS
+    }
+    data = {
+        split: json.loads(path.read_text()) 
+        for split, path in data_paths.items()
+    }
     datasets: Dict[str, SeqClsDataset] = {
         split: SeqClsDataset(split_data, vocab, intent2idx, args.max_len)
         for split, split_data in data.items()

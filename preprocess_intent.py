@@ -32,7 +32,7 @@ def build_vocab(
 
     glove: Dict[str, List[float]] = {}
     logging.info(f"Loading glove: {str(glove_path.resolve())}")
-    with open(glove_path) as fp:
+    with open(glove_path, encoding="utf-8") as fp:
         row1 = fp.readline()
         # if the first row is not header
         if not re.match("^[0-9]+ [0-9]+$", row1):
@@ -104,7 +104,7 @@ def parse_args() -> Namespace:
         "--glove_path",
         type=Path,
         help="Path to Glove Embedding.",
-        default="./glove.840B.300d.txt",
+        default="glove.840B.300d.txt",
     )
     parser.add_argument("--rand_seed", type=int, help="Random seed.", default=13)
     parser.add_argument(

@@ -13,6 +13,7 @@ class SeqClsDataset(Dataset):
         label_mapping: Dict[str, int],
         max_len: int,
     ):
+        print("max_len", max_len)
         self.data = data
         self.vocab = vocab
         self.label_mapping = label_mapping
@@ -32,7 +33,19 @@ class SeqClsDataset(Dataset):
 
     def collate_fn(self, samples: List[Dict]) -> Dict:
         # TODO: implement collate_fn
-        raise NotImplementedError
+        print(samples)
+        label_list = []
+        input_ids_list = []
+        attention_mask_list = []
+        for sample in samples:
+            label_list.append(self.label2idx(sample['intent']))
+            input_ids_list.append(sample['id'])
+            attention_mask_list.append(self.vocab.encode_batch([sample['text'].split(" ")], self.max_len))
+        return {
+            'label': label_list,
+            'input_ids': input_ids_list,
+            'attention_mask': attention_mask_list
+        }
 
     def label2idx(self, label: str):
         return self.label_mapping[label]
