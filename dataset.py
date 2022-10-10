@@ -13,7 +13,6 @@ class SeqClsDataset(Dataset):
         label_mapping: Dict[str, int],
         max_len: int,
     ):
-        print("max_len", max_len)
         self.data = data
         self.vocab = vocab
         self.label_mapping = label_mapping
@@ -42,9 +41,9 @@ class SeqClsDataset(Dataset):
             input_ids_list.append(sample['id'])
             attention_mask_list.append(self.vocab.encode_batch([sample['text'].split(" ")], self.max_len))
         return {
-            'label': label_list,
-            'input_ids': input_ids_list,
-            'attention_mask': attention_mask_list
+            "labels": label_list,
+            "ids": input_ids_list,
+            "encode_sentences": attention_mask_list
         }
 
     def label2idx(self, label: str):

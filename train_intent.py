@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Dict
 
 import torch
+from torch.utils.data import DataLoader
 from tqdm import trange
-
+from model import SeqClassifier
 from dataset import SeqClsDataset
 from utils import Vocab
 
@@ -35,17 +36,49 @@ def main(args):
         for split, split_data in data.items()
     }
     # TODO: crecate DataLoader for train / dev datasets
+    train_data_loader = DataLoader(
+        datasets["train"],
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=datasets["train"].collate_fn,
+    )
+    dev_data_loader = DataLoader(
+        datasets["eval"],
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=datasets["eval"].collate_fn,
+    )
+    test_data_loader = DataLoader(
+        datasets["test"],
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=datasets["test"].collate_fn,
+    )
 
     embeddings = torch.load(args.cache_dir / "embeddings.pt")
+
     # TODO: init model and move model to target device(cpu / gpu)
-    model = None
+    model = SeqClassifier(
+        embeddings,
+        args.hidden_size,
+        args.num_layers,
+        args.dropout,
+        args.num_classes,
+        args.bidirectional,
+    )
+    model.to(args.device)
 
     # TODO: init optimizer
-    optimizer = None
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    criterion = torch.nn.CrossEntropyLoss()
 
     epoch_pbar = trange(args.num_epoch, desc="Epoch")
     for epoch in epoch_pbar:
         # TODO: Training loop - iterate over train dataloader and update model weights
+        model.train()
+        for batch in train_data_loader:
+            optimizer.zero_grad()
+            pred = model(batch["encode_sentences"].to(args.device))
         # TODO: Evaluation loop - calculate accuracy and save model weights
         pass
 
