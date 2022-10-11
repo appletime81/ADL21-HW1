@@ -27,24 +27,31 @@ class SeqClassifier(torch.nn.Module):
             hidden_size=self.hidden_size,
             num_layers=self.num_layers,
             dropout=self.dropout,
-            bidirectional=self.bidirectional,
+            bidirectional=True if self.bidirectional else False,
+            batch_first=True
         )
         self.fc = torch.nn.Linear(
             in_features=self.hidden_size * 2 if self.bidirectional else self.hidden_size,
             out_features=self.num_class,
         )
+        self.dropout = torch.nn.Dropout(self.dropout)
 
     @property
     def encoder_output_size(self) -> int:
         return self.hidden_size * 2 if self.bidirectional else self.hidden_size
 
     def forward(self, batch) -> Dict[str, torch.Tensor]:
-        embed = self.embed(batch["encode_sentences"])
-        output, _ = self.rnn(embed)
-        output = self.fc(output)
-        return output
-
-
+        embed = self.embed(batch)
+        output, (hidden, cell) = self.rnn(embed)
+        if self.rnn.bidirectional:
+            # print("bidirectional")
+            hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        else:
+            # print("not bidirectional")
+            hidden = hidden[-1, :, :]
+            hidden = self.dropout(hidden)
+        pred = self.fc(hidden)
+        return pred
 
 
 class SeqTagger(SeqClassifier):
@@ -55,6 +62,7 @@ class SeqTagger(SeqClassifier):
 
 if __name__ == "__main__":
     embeddings = torch.load("cache/intent/embeddings.pt")
+    print(embeddings.shape)
     seq_classifier = SeqClassifier(
         embeddings=embeddings,
         hidden_size=512,

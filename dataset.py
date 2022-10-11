@@ -1,5 +1,5 @@
 from typing import List, Dict
-
+import torch
 from torch.utils.data import Dataset
 
 from utils import Vocab
@@ -31,19 +31,23 @@ class SeqClsDataset(Dataset):
         return len(self.label_mapping)
 
     def collate_fn(self, samples: List[Dict]) -> Dict:
-        # TODO: implement collate_fn
-        print(samples)
-        label_list = []
-        input_ids_list = []
-        attention_mask_list = []
-        for sample in samples:
-            label_list.append(self.label2idx(sample['intent']))
-            input_ids_list.append(sample['id'])
-            attention_mask_list.append(self.vocab.encode_batch([sample['text'].split(" ")], self.max_len))
+        # TODO: implement collate_fns:
+        batch_ids = self.vocab.encode_batch(
+            [list(item.get("text").split(" ")) for item in samples],
+            self.max_len
+        )
+        batch_ids = torch.tensor(batch_ids)
+        batch_labels = [item.get("intent") for item in samples]
+        batch_labels = [torch.tensor(self.label2idx(label)) for label in batch_labels]
+        batch_labels = torch.stack(batch_labels)
+
+        batch_lengths = [torch.tensor(len(item)) for item in batch_ids]
+        batch_lengths = torch.tensor(batch_lengths)
+
         return {
-            "labels": label_list,
-            "ids": input_ids_list,
-            "encode_sentences": attention_mask_list
+            "ids": batch_ids,
+            "labels": batch_labels,
+            "lengths": batch_lengths,
         }
 
     def label2idx(self, label: str):

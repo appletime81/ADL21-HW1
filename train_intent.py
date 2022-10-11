@@ -48,23 +48,24 @@ def main(args):
         shuffle=True,
         collate_fn=datasets["eval"].collate_fn,
     )
-    test_data_loader = DataLoader(
-        datasets["test"],
-        batch_size=args.batch_size,
-        shuffle=True,
-        collate_fn=datasets["test"].collate_fn,
-    )
+    # test_data_loader = DataLoader(
+    #     datasets["test"],
+    #     batch_size=args.batch_size,
+    #     shuffle=True,
+    #     collate_fn=datasets["test"].collate_fn,
+    # )
 
     embeddings = torch.load(args.cache_dir / "embeddings.pt")
-
+    epoch_losses = []
+    epoch_accs = []
     # TODO: init model and move model to target device(cpu / gpu)
     model = SeqClassifier(
         embeddings,
-        args.hidden_size,
-        args.num_layers,
-        args.dropout,
-        args.num_classes,
-        args.bidirectional,
+        int(args.hidden_size),
+        int(args.num_layers),
+        float(args.dropout),
+        int(args.bidirectional),
+        150,
     )
     model.to(args.device)
 
@@ -77,10 +78,31 @@ def main(args):
         # TODO: Training loop - iterate over train dataloader and update model weights
         model.train()
         for batch in train_data_loader:
+            ids = batch["ids"].to(args.device)
+            labels = batch["labels"].to(args.device)
+            pred = model(ids).to(args.device)
+            print((pred.argmax(dim=1) == labels))
+            loss = criterion(pred, labels).to(args.device)
             optimizer.zero_grad()
-            pred = model(batch["encode_sentences"].to(args.device))
+            loss.backward()
+            optimizer.step()
+            epoch_losses.append(loss.item())
+            epoch_accs.append((pred.argmax(dim=1) == labels).float().mean().item())
+
         # TODO: Evaluation loop - calculate accuracy and save model weights
-        pass
+        model.eval()
+        with torch.no_grad():
+            for batch in dev_data_loader:
+                ids = batch["ids"].to(args.device)
+                labels = batch["labels"].to(args.device)
+                pred = model(ids).to(args.device)
+                loss = criterion(pred, labels).to(args.device)
+                epoch_losses.append(loss.item())
+                epoch_accs.append((pred.argmax(dim=1) == labels).float().mean().item())
+
+    print(epoch_losses)
+    print(epoch_accs)
+
 
     # TODO: Inference on test set
 
