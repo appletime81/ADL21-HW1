@@ -37,17 +37,23 @@ class SeqClsDataset(Dataset):
             self.max_len
         )
         batch_ids = torch.tensor(batch_ids)
-        batch_labels = [item.get("intent") for item in samples]
-        batch_labels = [torch.tensor(self.label2idx(label)) for label in batch_labels]
-        batch_labels = torch.stack(batch_labels)
+        try:
+            batch_labels = [item.get("intent") for item in samples]
+            batch_labels = [torch.tensor(self.label2idx(label)) for label in batch_labels]
+            batch_labels = torch.stack(batch_labels)
+        except KeyError:
+            pass
 
         batch_lengths = [torch.tensor(len(item)) for item in batch_ids]
         batch_lengths = torch.tensor(batch_lengths)
+
+        batch_index = [item.get("id") for item in samples]
 
         return {
             "ids": batch_ids,
             "labels": batch_labels,
             "lengths": batch_lengths,
+            "index": batch_index
         }
 
     def label2idx(self, label: str):

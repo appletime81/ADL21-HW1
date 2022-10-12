@@ -1,3 +1,9 @@
-# "${1}" is the first argument passed to the script
-# "${2}" is the second argument passed to the script
-python3 test_intent.py --test_file "${1}" --ckpt_path ckpt/intent/best.pt --pred_file "${2}"
+test_file="./data/intent/test.json"
+ckpt_path="./ckpt/intent/intent_model.pt"
+
+echo "Start testing..."
+python test_intent.py --test_file ${test_file} --ckpt_path ${ckpt_path}
+echo "Finish testing..."
+
+
+

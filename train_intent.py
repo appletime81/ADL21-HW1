@@ -1,15 +1,16 @@
 import json
 import pickle
-from argparse import ArgumentParser, Namespace
-from pathlib import Path
-from typing import Dict
-
+import numpy as np
 import torch
-from torch.utils.data import DataLoader
+
+from utils import Vocab
+from typing import Dict
 from tqdm import trange
+from pathlib import Path
 from model import SeqClassifier
 from dataset import SeqClsDataset
-from utils import Vocab
+from torch.utils.data import DataLoader
+from argparse import ArgumentParser, Namespace
 
 TRAIN = "train"
 DEV = "eval"
@@ -48,24 +49,16 @@ def main(args):
         shuffle=True,
         collate_fn=datasets["eval"].collate_fn,
     )
-    # test_data_loader = DataLoader(
-    #     datasets["test"],
-    #     batch_size=args.batch_size,
-    #     shuffle=True,
-    #     collate_fn=datasets["test"].collate_fn,
-    # )
 
     embeddings = torch.load(args.cache_dir / "embeddings.pt")
-    epoch_losses = []
-    epoch_accs = []
     # TODO: init model and move model to target device(cpu / gpu)
     model = SeqClassifier(
         embeddings,
-        int(args.hidden_size),
-        int(args.num_layers),
-        float(args.dropout),
-        int(args.bidirectional),
-        150,
+        args.hidden_size,
+        args.num_layers,
+        args.dropout,
+        args.bidirectional,
+        len(intent2idx),
     )
     model.to(args.device)
 
@@ -73,35 +66,58 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = torch.nn.CrossEntropyLoss()
 
+    train_losses = []
+    train_accs = []
+    valid_losses = []
+    valid_accs = []
+    best_valid_loss = float('inf')
+
     epoch_pbar = trange(args.num_epoch, desc="Epoch")
     for epoch in epoch_pbar:
         # TODO: Training loop - iterate over train dataloader and update model weights
         model.train()
+        epoch_train_losses = []
+        epoch_train_accs = []
         for batch in train_data_loader:
             ids = batch["ids"].to(args.device)
             labels = batch["labels"].to(args.device)
             pred = model(ids).to(args.device)
-            print((pred.argmax(dim=1) == labels))
             loss = criterion(pred, labels).to(args.device)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            epoch_losses.append(loss.item())
-            epoch_accs.append((pred.argmax(dim=1) == labels).float().mean().item())
+            epoch_train_losses.append(loss.item())
+            epoch_train_accs.append((pred.argmax(dim=1) == labels).float().mean().item())
 
         # TODO: Evaluation loop - calculate accuracy and save model weights
         model.eval()
+        epoch_eval_losses = []
+        epoch_eval_accs = []
         with torch.no_grad():
             for batch in dev_data_loader:
                 ids = batch["ids"].to(args.device)
                 labels = batch["labels"].to(args.device)
                 pred = model(ids).to(args.device)
                 loss = criterion(pred, labels).to(args.device)
-                epoch_losses.append(loss.item())
-                epoch_accs.append((pred.argmax(dim=1) == labels).float().mean().item())
+                epoch_eval_losses.append(loss.item())
+                epoch_eval_accs.append((pred.argmax(dim=1) == labels).float().mean().item())
 
-    print(epoch_losses)
-    print(epoch_accs)
+        train_losses.extend(epoch_train_losses)
+        train_accs.extend(epoch_train_accs)
+        valid_losses.extend(epoch_eval_losses)
+        valid_accs.extend(epoch_eval_accs)
+
+        epoch_train_loss = np.mean(epoch_train_losses)
+        epoch_train_acc = np.mean(epoch_train_accs)
+        epoch_valid_loss = np.mean(epoch_eval_losses)
+        epoch_valid_acc = np.mean(epoch_eval_accs)
+
+        print(epoch_train_acc)
+        print(epoch_valid_acc)
+
+        if epoch_valid_loss < best_valid_loss:
+            best_valid_loss = epoch_valid_loss
+            torch.save(model.state_dict(), args.ckpt_dir / 'intent_model.pt')
 
 
     # TODO: Inference on test set
@@ -157,3 +173,6 @@ if __name__ == "__main__":
     args = parse_args()
     args.ckpt_dir.mkdir(parents=True, exist_ok=True)
     main(args)
+
+    # command
+    # python train_intent.py --device cuda --ckpt_dir ./ckpt/intent/

@@ -4,8 +4,9 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Dict
 
+import pandas as pd
 import torch
-
+from torch.utils.data import DataLoader
 from dataset import SeqClsDataset
 from model import SeqClassifier
 from utils import Vocab
@@ -21,6 +22,12 @@ def main(args):
     data = json.loads(args.test_file.read_text())
     dataset = SeqClsDataset(data, vocab, intent2idx, args.max_len)
     # TODO: crecate DataLoader for test dataset
+    test_data_loader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=dataset.collate_fn,
+    )
 
     embeddings = torch.load(args.cache_dir / "embeddings.pt")
 
@@ -36,10 +43,24 @@ def main(args):
 
     ckpt = torch.load(args.ckpt_path)
     # load weights into model
+    model.load_state_dict(ckpt)
+    model.to(args.device)
 
     # TODO: predict dataset
+    predict_list = []
+    for batch in test_data_loader:
+        ids = batch["ids"].to(args.device)
+        pred = model(ids).to(args.device)
+        pred = torch.argmax(pred, dim=1).tolist()
+
+        for idx, label in zip(batch["index"], pred):
+            predict_list.append(
+                [idx, dataset._idx2label[label]]
+            )
 
     # TODO: write prediction to file (args.pred_file)
+    res_csv = pd.DataFrame(predict_list, columns=["id", "intent"])
+    res_csv.to_csv(args.pred_file, index=False)
 
 
 def parse_args() -> Namespace:
@@ -86,3 +107,5 @@ def parse_args() -> Namespace:
 if __name__ == "__main__":
     args = parse_args()
     main(args)
+    # command
+    # python test_intent.py --test_file ./data/intent/test.json --ckpt_path ./ckpt/intent/intent_model.pt

@@ -60,18 +60,18 @@ class SeqTagger(SeqClassifier):
         raise NotImplementedError
 
 
-if __name__ == "__main__":
-    embeddings = torch.load("cache/intent/embeddings.pt")
-    print(embeddings.shape)
-    seq_classifier = SeqClassifier(
-        embeddings=embeddings,
-        hidden_size=512,
-        num_layers=2,
-        dropout=0.1,
-        bidirectional=True,
-        num_class=150,
-    )
-
-    # see the model architecture
-    print(seq_classifier)
-    print(seq_classifier.encoder_output_size)
+# if __name__ == "__main__":
+#     embeddings = torch.load("cache/intent/embeddings.pt")
+#     print(embeddings.shape)
+#     seq_classifier = SeqClassifier(
+#         embeddings=embeddings,
+#         hidden_size=512,
+#         num_layers=2,
+#         dropout=0.1,
+#         bidirectional=True,
+#         num_class=150,
+#     )
+#
+#     # see the model architecture
+#     print(seq_classifier)
+#     print(seq_classifier.encoder_output_size)
