@@ -27,7 +27,6 @@ with open("cache/intent/intent2idx.json") as f:
 
 
 data_paths = {split: Path(f"data/intent/{split}.json") for split in SPLITS}
-print(data_paths)
 data = {split: json.loads(path.read_text()) for split, path in data_paths.items()}
 
 
@@ -35,14 +34,15 @@ datasets: Dict[str, SeqClsDataset] = {
     split: SeqClsDataset(split_data, vocab, intent2idx, max_len)
     for split, split_data in data.items()
 }
-print(datasets)
+
 
 train_loader = DataLoader(
     datasets["train"],
     batch_size=128,
-    shuffle=True,
-    collate_fn=datasets["train"].collate_fn
+    shuffle=False,
+    collate_fn=datasets["train"].collate_fn,
 )
 for batch in train_loader:
     print(batch["ids"].shape)
+    print(batch["labels"].shape)
     break

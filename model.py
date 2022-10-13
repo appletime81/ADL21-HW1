@@ -57,21 +57,14 @@ class SeqClassifier(torch.nn.Module):
 class SeqTagger(SeqClassifier):
     def forward(self, batch) -> Dict[str, torch.Tensor]:
         # TODO: implement model forward
-        raise NotImplementedError
-
-
-# if __name__ == "__main__":
-#     embeddings = torch.load("cache/intent/embeddings.pt")
-#     print(embeddings.shape)
-#     seq_classifier = SeqClassifier(
-#         embeddings=embeddings,
-#         hidden_size=512,
-#         num_layers=2,
-#         dropout=0.1,
-#         bidirectional=True,
-#         num_class=150,
-#     )
-#
-#     # see the model architecture
-#     print(seq_classifier)
-#     print(seq_classifier.encoder_output_size)
+        embed = self.embed(batch)
+        output, (hidden, cell) = self.rnn(embed)
+        if self.rnn.bidirectional:
+            # print("bidirectional")
+            hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        else:
+            # print("not bidirectional")
+            hidden = hidden[-1, :, :]
+            hidden = self.dropout(hidden)
+        pred = self.fc(hidden)
+        return pred

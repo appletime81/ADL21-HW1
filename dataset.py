@@ -17,6 +17,7 @@ class SeqClsDataset(Dataset):
         self.vocab = vocab
         self.label_mapping = label_mapping
         self._idx2label = {idx: intent for intent, idx in self.label_mapping.items()}
+        # print(self._idx2label)
         self.max_len = max_len
 
     def __len__(self) -> int:
@@ -68,4 +69,23 @@ class SeqTaggingClsDataset(SeqClsDataset):
 
     def collate_fn(self, samples):
         # TODO: implement collate_fn
-        raise NotImplementedError
+        batch_ids = self.vocab.encode_batch(
+            [list(item.get("token")) for item in samples],
+            self.max_len
+        )
+        batch_ids = torch.tensor(batch_ids)
+
+        try:
+            batch_labels = [item.get("tag") for item in samples]
+            batch_labels = [torch.tensor(self.label2idx(label)) for label in batch_labels]
+            batch_labels = torch.stack(batch_labels)
+        except KeyError:
+            pass
+
+        batch_index = [item.get("id") for item in samples]
+
+        return {
+            "ids": batch_ids,
+            "labels": batch_labels,
+            "index": batch_index
+        }
