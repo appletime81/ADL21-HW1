@@ -1,93 +1,48 @@
 import json
-import pickle
-from argparse import ArgumentParser, Namespace
-from pathlib import Path
-from typing import Dict
-
+import time
 import torch
-from torch.optim import Adam
-from torch.utils.data import DataLoader
-from tqdm import tqdm, trange
+import pickle
 
-from dataset import SeqTaggingClsDataset
-from model import SeqTagger
-from utils import Vocab
 import numpy as np
-
-TRAIN = "train"
-DEV = "eval"
-SPLITS = [TRAIN, DEV]
+from utils import Vocab
+from tqdm import trange
+from typing import Dict
+from pathlib import Path
+from model import SeqTagger
+from torch.utils.data import DataLoader
+from dataset import SeqTaggingClsDataset
+from argparse import ArgumentParser, Namespace
 
 
 def main(args):
-    # loading embedding
     with open(args.cache_dir / "vocab.pkl", "rb") as f:
-        vocab = pickle.load(f)
+        vocab: Vocab = pickle.load(f)
     embeddings = torch.load(args.cache_dir / "embeddings.pt")
 
-    # loading mapping table
     tag_idx_path = args.cache_dir / "tag2idx.json"
     tag2idx: Dict[str, int] = json.loads(tag_idx_path.read_text())
 
-    TRAIN = "train"
-    DEV = "eval"
-    SPLITS = [TRAIN, DEV]
+    train_data_file = args.data_dir / "train.json"
+    train_data = json.loads(train_data_file.read_text())
+    train_dataset = SeqTaggingClsDataset(train_data, vocab, tag2idx, args.max_len)
 
-    # loading data
-    data_paths = {
-        split: args.data_dir / f"{split}.json"
-        for split in SPLITS
-    }
-    data = {
-        split: json.loads(path.read_text())
-        for split, path in data_paths.items()
-    }
-    data_train = [
-        {
-            "token": token,
-            "tag": tag,
-            "id": item["id"]
+    eval_data_file = args.data_dir / "eval.json"
+    eval_data = json.loads(eval_data_file.read_text())
+    eval_dataset = SeqTaggingClsDataset(eval_data, vocab, tag2idx, args.max_len)
 
-        }
-        for item in data["train"]
-        for token, tag in zip(item["tokens"], item["tags"])
-    ]
-    data_eval = [
-        {
-            "token": token,
-            "tag": tag,
-            "id": item["id"]
-
-        }
-        for item in data["eval"]
-        for token, tag in zip(item["tokens"], item["tags"])
-    ]
-    data = {
-        "train": data_train,
-        "eval": data_eval
-    }
-
-    # generate dataset
-    datasets: Dict[str, SeqTaggingClsDataset] = {
-        split: SeqTaggingClsDataset(split_data, vocab, tag2idx, args.max_len)
-        for split, split_data in data.items()
-    }
-
-    # generate dataloader
+    # TODO: crecate DataLoader for test dataset
     train_data_loader = DataLoader(
-        datasets["train"],
+        train_dataset,
         batch_size=args.batch_size,
-        shuffle=False,
-        collate_fn=datasets["train"].collate_fn
+        shuffle=True,
+        collate_fn=train_dataset.collate_fn,
     )
-    dev_data_loader = DataLoader(
-        datasets["eval"],
+    eval_data_loader = DataLoader(
+        eval_dataset,
         batch_size=args.batch_size,
-        shuffle=False,
-        collate_fn=datasets["eval"].collate_fn,
+        shuffle=True,
+        collate_fn=eval_dataset.collate_fn,
     )
-
-    # start training
     model = SeqTagger(
         embeddings,
         args.hidden_size,
@@ -100,16 +55,17 @@ def main(args):
 
     # TODO: init optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.NLLLoss()
 
     train_losses = []
     train_accs = []
     valid_losses = []
     valid_accs = []
-    best_valid_loss = float('inf')
+    best_valid_acc = float('-inf')
 
     epoch_pbar = trange(args.num_epoch, desc="Epoch")
     for epoch in epoch_pbar:
+        start_time = time.time()
         # TODO: Training loop - iterate over train dataloader and update model weights
         model.train()
         epoch_train_losses = []
@@ -130,7 +86,7 @@ def main(args):
         epoch_eval_losses = []
         epoch_eval_accs = []
         with torch.no_grad():
-            for batch in dev_data_loader:
+            for batch in eval_data_loader:
                 ids = batch["ids"].to(args.device)
                 labels = batch["labels"].to(args.device)
                 pred = model(ids).to(args.device)
@@ -151,9 +107,10 @@ def main(args):
         print(epoch_train_acc)
         print(epoch_valid_acc)
 
-        if epoch_valid_loss < best_valid_loss:
-            best_valid_loss = epoch_valid_loss
+        if epoch_valid_acc > best_valid_acc:
+            best_valid_acc = epoch_valid_acc
             torch.save(model.state_dict(), args.ckpt_dir / 'slot_model.pt')
+        print(f"Epoch time: {(time.time() - start_time) / 60} min")
 
 
 def parse_args() -> Namespace:
@@ -207,4 +164,4 @@ if __name__ == "__main__":
     args.ckpt_dir.mkdir(parents=True, exist_ok=True)
     main(args)
     # command
-    # python train_slot.py --device cuda --num_epoch 60
+    # python train_slot.py --device cuda --num_epoch 20 --batch_size 1 --max_len 40 --num_layers 4

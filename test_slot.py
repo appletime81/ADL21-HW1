@@ -22,17 +22,7 @@ def main(args):
     tag2idx: Dict[str, int] = json.loads(tag_idx_path.read_text())
 
     data = json.loads(args.test_file.read_text())
-
-    data_eval = [
-        {
-            "token": token,
-            "id": item["id"]
-        }
-        for item in data
-        for token in item["tokens"]
-    ]
-
-    dataset = SeqTaggingClsDataset(data_eval, vocab, tag2idx, args.max_len)
+    dataset = SeqTaggingClsDataset(data, vocab, tag2idx, args.max_len)
 
     # TODO: crecate DataLoader for test dataset
     test_data_loader = DataLoader(
@@ -55,37 +45,26 @@ def main(args):
     test_model.to(args.device)
     test_model.eval()
 
-    result_index_list = list()
-    result_ids_list = list()
-
+    result_dict = {
+        "id": list(),
+        "tags": list()
+    }
+    count = 0
     for batch in test_data_loader:
         ids = batch["ids"].to(args.device)
         pred = test_model(ids).to(args.device)
-        result_ids_list.extend(
-            pred.argmax(dim=1).tolist()
-        )
-        result_index_list.extend(batch["index"])
+        sentence_len = len(data[count].get("tokens"))
+        pred_res = pred.argmax(dim=1).tolist()[:sentence_len]
+        pred_res = [dataset.idx2label(res) for res in pred_res]
+        pred_res_str = " ".join(pred_res)
 
-    result_dict = dict()
-    for index, id in zip(result_index_list, result_ids_list):
-        if index not in result_dict:
-            result_dict[index] = []
-        result_dict[index].append(
-            dataset.idx2label(id)
-        )
+        result_dict["id"].append(data[count]["id"])
+        result_dict["tags"].append(pred_res_str)
 
-    csv_dict = {
-        "id": [],
-        "tags": []
-    }
-    for k, v in result_dict.items():
-        csv_dict["id"].append(k)
-        csv_dict["tags"].append(
-            " ".join(v)
-        )
+        count += 1
 
-    csv_result = pd.DataFrame(csv_dict)
-    csv_result.to_csv(args.pred_file, index=False)
+    result_df = pd.DataFrame(result_dict)
+    result_df.to_csv(args.pred_file, index=False)
 
 
 def parse_args() -> Namespace:
@@ -139,4 +118,5 @@ if __name__ == "__main__":
     args = parse_args()
     main(args)
     # command
-    # python test_slot.py --test_file ./data/slot/test.json --pred_file pred.slot.csv --device cuda
+    # score: 0.72171
+    # python test_slot.py --test_file ./data/slot/test.json --pred_file pred.slot.csv --device cuda --batch_size 1 --max_len 40 --num_layers 4

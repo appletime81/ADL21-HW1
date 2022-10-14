@@ -70,16 +70,23 @@ class SeqTaggingClsDataset(SeqClsDataset):
     def collate_fn(self, samples):
         # TODO: implement collate_fn
         batch_ids = self.vocab.encode_batch(
-            [list(item.get("token")) for item in samples],
+            [list(item.get("tokens")) for item in samples],
             self.max_len
         )
         batch_ids = torch.tensor(batch_ids)
 
+        batch_labels = [item.get("tags") for item in samples]
         try:
-            batch_labels = [item.get("tag") for item in samples]
-            batch_labels = [torch.tensor(self.label2idx(label)) for label in batch_labels]
-            batch_labels = torch.stack(batch_labels)
-        except KeyError:
+            batch_labels = [
+                self.label2idx(label)
+                for label_item in batch_labels
+                for label in label_item
+            ]
+
+            if len(batch_labels) < self.max_len:
+                batch_labels += [7] * (self.max_len - len(batch_labels))
+            batch_labels = torch.tensor(batch_labels)
+        except TypeError:
             pass
 
         batch_index = [item.get("id") for item in samples]

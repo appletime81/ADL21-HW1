@@ -2,17 +2,18 @@ from typing import Dict
 
 import torch
 from torch.nn import Embedding
+import torch.nn.functional as F
 
 
 class SeqClassifier(torch.nn.Module):
     def __init__(
-        self,
-        embeddings: torch.tensor,
-        hidden_size: int,
-        num_layers: int,
-        dropout: float,
-        bidirectional: bool,
-        num_class: int,
+            self,
+            embeddings: torch.tensor,
+            hidden_size: int,
+            num_layers: int,
+            dropout: float,
+            bidirectional: bool,
+            num_class: int,
     ) -> None:
         super(SeqClassifier, self).__init__()
         self.embed = Embedding.from_pretrained(embeddings, freeze=False)
@@ -55,16 +56,46 @@ class SeqClassifier(torch.nn.Module):
 
 
 class SeqTagger(SeqClassifier):
+    def __init__(
+            self,
+            embeddings: torch.tensor,
+            hidden_size: int,
+            num_layers: int,
+            dropout: float,
+            bidirectional: bool,
+            num_class: int,
+    ) -> None:
+        super(SeqTagger, self).__init__(
+            embeddings=embeddings,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout,
+            bidirectional=bidirectional,
+            num_class=num_class,
+        )
+        self.embed = Embedding.from_pretrained(embeddings, freeze=False)
+        self.embed_dim = embeddings.shape[1]
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.dropout_rate = dropout
+        self.num_class = num_class
+        self.bidirectional = bidirectional
+        self.dropout = torch.nn.Dropout(p=self.dropout_rate)
+        self.rnn = torch.nn.GRU(
+            self.embed_dim,
+            hidden_size=self.hidden_size,
+            bidirectional=self.bidirectional,
+            num_layers=self.num_layers,
+            batch_first=True
+        )
+        if self.bidirectional == True:
+            self.linear = torch.nn.Linear(self.hidden_size * 2, self.num_class)
+        elif self.bidirectional == False:
+            self.linear = torch.nn.Linear(self.hidden_size, self.num_class)
+
     def forward(self, batch) -> Dict[str, torch.Tensor]:
-        # TODO: implement model forward
-        embed = self.embed(batch)
-        output, (hidden, cell) = self.rnn(embed)
-        if self.rnn.bidirectional:
-            # print("bidirectional")
-            hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
-        else:
-            # print("not bidirectional")
-            hidden = hidden[-1, :, :]
-            hidden = self.dropout(hidden)
-        pred = self.fc(hidden)
-        return pred
+        input_embedding = self.embed(batch)
+        rnn_out, _ = self.rnn(input_embedding, None)
+        affine_out = self.linear(torch.squeeze(rnn_out, 0))
+
+        return F.log_softmax(affine_out)
